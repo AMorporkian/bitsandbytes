@@ -947,6 +947,7 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
   {
       valid_items = n - i >= (BLOCK_SIZE) ? (BLOCK_SIZE) : n - i;
   }
+}
 
 template<typename T, int OPTIMIZER, int BLOCK_SIZE, int NUM_VALS>
 __launch_bounds__(BLOCK_SIZE/NUM_VALS, 1)
@@ -1076,7 +1077,7 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
 
       __syncwarp();
   }
-}
+
 
 
 
