@@ -950,7 +950,77 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
 }
 
 template<typename T, int OPTIMIZER, int BLOCK_SIZE, int NUM_VALS>
+template<typename T, int OPTIMIZER, int BLOCK_SIZE, int NUM_VALS>
 __launch_bounds__(BLOCK_SIZE/NUM_VALS, 1)
+__global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
+                float* state1, float* state2, float *unorm,
+                const float beta1, const float beta2, const float eps, const float weight_decay,
+                const int step, const float lr, const float gnorm_scale, const int n)
+{
+
+  const int n_full = (BLOCK_SIZE*(n/BLOCK_SIZE)) + (n % BLOCK_SIZE == 0 ? 0 : BLOCK_SIZE);
+  const int base_idx = (blockIdx.x * blockDim.x * NUM_VALS);
+  int valid_items = 0;
+
+  T g_vals[NUM_VALS];
+
+  float s1_vals[NUM_VALS];
+  float s2_vals[NUM_VALS];
+
+  const float correction1 = 1.0f/(1.0f - powf(beta1, step));
+  const float correction2 = 1.0f/(1.0f - powf(beta2, step));
+
+  typedef cub::BlockLoad<T, BLOCK_SIZE/NUM_VALS, NUM_VALS, cub::BLOCK_LOAD_WARP_TRANSPOSE> Load;
+  typedef cub::BlockLoad<float, BLOCK_SIZE/NUM_VALS, NUM_VALS, cub::BLOCK_LOAD_WARP_TRANSPOSE> LoadFloat;
+  typedef cub::BlockReduce<float, BLOCK_SIZE/NUM_VALS> BlockReduce;
+
+  __shared__ union {
+      typename Load::TempStorage load;
+      typename LoadFloat::TempStorage loadf;
+      typename BlockReduce::TempStorage reduce;
+  } temp_storage;
+
+  for (unsigned int i = base_idx; i < n_full; i += gridDim.x*BLOCK_SIZE)
+  {
+      valid_items = n - i >= (BLOCK_SIZE) ? (BLOCK_SIZE) : n - i;
+  }
+}
+
+template<typename T, int OPTIMIZER, int BLOCK_SIZE, int NUM_VALS>
+__launch_bounds__(BLOCK_SIZE/NUM_VALS, 1)
+__global__ void kPreconditionOptimizer32bit2State2(T* g, T* p,
+                float* state1, float* state2, float *unorm,
+                const float beta1, const float beta2, const float eps, const float weight_decay,
+                const int step, const float lr, const float gnorm_scale, const int n)
+{
+
+  const int n_full = (BLOCK_SIZE*(n/BLOCK_SIZE)) + (n % BLOCK_SIZE == 0 ? 0 : BLOCK_SIZE);
+  const int base_idx = (blockIdx.x * blockDim.x * NUM_VALS);
+  int valid_items = 0;
+
+  T g_vals[NUM_VALS];
+
+  float s1_vals[NUM_VALS];
+  float s2_vals[NUM_VALS];
+
+  const float correction1 = 1.0f/(1.0f - powf(beta1, step));
+  const float correction2 = 1.0f/(1.0f - powf(beta2, step));
+
+  typedef cub::BlockLoad<T, BLOCK_SIZE/NUM_VALS, NUM_VALS, cub::BLOCK_LOAD_WARP_TRANSPOSE> Load;
+  typedef cub::BlockLoad<float, BLOCK_SIZE/NUM_VALS, NUM_VALS, cub::BLOCK_LOAD_WARP_TRANSPOSE> LoadFloat;
+  typedef cub::BlockReduce<float, BLOCK_SIZE/NUM_VALS> BlockReduce;
+
+  __shared__ union {
+      typename Load::TempStorage load;
+      typename LoadFloat::TempStorage loadf;
+      typename BlockReduce::TempStorage reduce;
+  } temp_storage2;
+
+  for (unsigned int i = base_idx; i < n_full; i += gridDim.x*BLOCK_SIZE)
+  {
+      valid_items = n - i >= (BLOCK_SIZE) ? (BLOCK_SIZE) : n - i;
+  }
+}
 __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
         float* state1, float* state2, float *unorm,
         const float beta1, const float beta2, const float eps, const float weight_decay,
