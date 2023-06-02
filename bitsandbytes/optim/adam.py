@@ -43,6 +43,33 @@ class PagedAdam32bit(Optimizer2State):
                        args=None, min_8bit_size=4096, percentile_clipping=100, block_wise=True, is_paged=False):
         super().__init__( "adam", params, lr, betas, eps, weight_decay, 32, args, min_8bit_size, percentile_clipping, block_wise, is_paged=True)
 
+class AdamA(Optimizer2State):
+    def __init__(self, optimizer_name, params, lr=0.001, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, optim_bits=32, args=None, min_8bit_size=4096, percentile_clipping=100, block_wise=True, max_unorm=0, skip_zeros=False, is_paged=False):
+        super().__init__(optimizer_name, params, lr, betas, eps, weight_decay, optim_bits, args, min_8bit_size, percentile_clipping, block_wise, max_unorm, skip_zeros, is_paged)
+class AdamA8bit(Optimizer2State):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False, optim_bits=32,
+                       args=None, min_8bit_size=4096, percentile_clipping=100, block_wise=True, is_paged=False):
+        super().__init__( "adam", params, lr, betas, eps, weight_decay, 8, args, min_8bit_size, percentile_clipping, block_wise, is_paged=is_paged)
+
+class AdamA32bit(Optimizer2State):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False, optim_bits=32,
+                       args=None, min_8bit_size=4096, percentile_clipping=100, block_wise=True, is_paged=False):
+        super().__init__( "adam", params, lr, betas, eps, weight_decay, 32, args, min_8bit_size, percentile_clipping, block_wise, is_paged=is_paged)
+
+class PagedAdamA(Optimizer2State):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False, optim_bits=32,
+                       args=None, min_8bit_size=4096, percentile_clipping=100, block_wise=True, is_paged=False):
+        super().__init__( "adam", params, lr, betas, eps, weight_decay, optim_bits, args, min_8bit_size, percentile_clipping, block_wise, is_paged=True)
+
+class PagedAdamA8bit(Optimizer2State):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False, optim_bits=32,
+                       args=None, min_8bit_size=4096, percentile_clipping=100, block_wise=True, is_paged=False):
+        super().__init__( "adam", params, lr, betas, eps, weight_decay, 8, args, min_8bit_size, percentile_clipping, block_wise, is_paged=True)
+
+class PagedAdamA32bit(Optimizer2State):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0, amsgrad=False, optim_bits=32,
+                       args=None, min_8bit_size=4096, percentile_clipping=100, block_wise=True, is_paged=False):
+        super().__init__( "adam", params, lr, betas, eps, weight_decay, 32, args, min_8bit_size, percentile_clipping, block_wise, is_paged=True)
 class AnalysisAdam(torch.optim.Optimizer):
     """Adam that performs 8-bit vs 32-bit error analysis.
 

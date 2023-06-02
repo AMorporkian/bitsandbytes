@@ -946,7 +946,87 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
   for (unsigned int i = base_idx; i < n_full; i += gridDim.x*BLOCK_SIZE)
   {
       valid_items = n - i >= (BLOCK_SIZE) ? (BLOCK_SIZE) : n - i;
+template<typename T, int OPTIMIZER, int BLOCK_SIZE, int NUM_VALS>
+__launch_bounds__(BLOCK_SIZE/NUM_VALS, 1)
+__global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
+        float* state1, float* state2, float *unorm,
+        const float beta1, const float beta2, const float eps, const float weight_decay,
+        const int step, const float lr, const float gnorm_scale, const int n)
+{
 
+  const int n_full = (BLOCK_SIZE*(n/BLOCK_SIZE)) + (n % BLOCK_SIZE == 0 ? 0 : BLOCK_SIZE);
+  const int base_idx = (blockIdx.x * blockDim.x * NUM_VALS);
+  int valid_items = 0;
+
+  T g_vals[NUM_VALS];
+
+  float s1_vals[NUM_VALS];
+  float s2_vals[NUM_VALS];
+
+  const float correction1 = 1.0f/(1.0f - powf(beta1, step));
+  const float correction2 = 1.0f/(1.0f - powf(beta2, step));
+
+  typedef cub::BlockLoad<T, BLOCK_SIZE/NUM_VALS, NUM_VALS, cub::BLOCK_LOAD_WARP_TRANSPOSE> Load;
+  typedef cub::BlockLoad<float, BLOCK_SIZE/NUM_VALS, NUM_VALS, cub::BLOCK_LOAD_WARP_TRANSPOSE> LoadFloat;
+  typedef cub::BlockReduce<float, BLOCK_SIZE/NUM_VALS> BlockReduce;
+
+  __shared__ union {
+    typename Load::TempStorage load;
+    typename LoadFloat::TempStorage loadf;
+    typename BlockReduce::TempStorage reduce;
+  } temp_storage;
+
+  for (unsigned int i = base_idx; i < n_full; i += gridDim.x*BLOCK_SIZE)
+  {
+    valid_items = n - i >= (BLOCK_SIZE) ? (BLOCK_SIZE) : n - i;
+
+    __syncthreads();
+    Load(temp_storage.load).Load(&(g[i]), g_vals, valid_items, 0.0f);
+    __syncthreads();
+    LoadFloat(temp_storage.loadf).Load(&(state1[i]), s1_vals, valid_items, 0.0f);
+    __syncthreads();
+    LoadFloat(temp_storage.loadf).Load(&(state2[i]), s2_vals, valid_items, 0.0f);
+
+    # pragma unroll NUM_VALS
+    for(unsigned int j = 0; j < NUM_VALS; j++)
+    g_vals[j] = gnorm_scale*((float)g_vals[j]);
+
+    # pragma unroll NUM_VALS
+    for(unsigned int j = 0; j < NUM_VALS; j++)
+    {
+      switch(OPTIMIZER)
+      {
+        case ADAM:
+          s1_vals[j] = s1_vals[j]*beta1 + ((1.0f -beta1)*((float)g_vals[j]));
+          s2_vals[j] = s2_vals[j]*beta2 + ((1.0f -beta2)*(((float)g_vals[j])*((float)g_vals[j])));
+          s1_vals[j] *= correction1;
+          s2_vals[j] *= correction2;
+          s1_vals[j] = s1_vals[j]/(sqrtf(s2_vals[j])+eps); // update
+          s1_vals[j] *= s1_vals[j]; // update l2 norm (update*update)
+          break;
+        case ADAMA:
+          s1_vals[j] = s1_vals[j]*beta1 + ((1.0f -beta1)*((float)g_vals[j]));
+          s2_vals[j] = s2_vals[j]*beta2 + ((1.0f -beta2)*(((float)g_vals[j])*((float)g_vals[j]))); // squared version
+          s1_vals[j] *= correction1;
+          s2_vals[j] *= correction2;
+          s1_vals[j] = s1_vals[j]/(sqrtf(s2_vals[j])+eps); // update
+          s1_vals[j] = sqrtf(s1_vals[j]); // update l2 norm (square root of update)
+          break;
+      }
+    }
+
+    __syncthreads();
+    StoreT(storet).Store(&(p[i]), s1_vals, valid_items);
+    __syncthreads();
+    StoreT(storet).Store(&(unorm[i]), s2_vals, valid_items);
+    __syncthreads();
+
+    for(unsigned int j = 0; j < valid_items; j++)
+    {
+      p[i+j] -= lr*(s1_vals[j] + weight_decay*p[i+j]);
+    }
+  }
+}
       __syncthreads();
       Load(temp_storage.load).Load(&(g[i]), g_vals, valid_items, 0.0f);
       __syncthreads();
@@ -970,6 +1050,14 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
                   s2_vals[j] *= correction2;
                   s1_vals[j] = s1_vals[j]/(sqrtf(s2_vals[j])+eps); // update
                   s1_vals[j] *= s1_vals[j]; // update l2 norm (update*update)
+                  break;
+              case ADAMA:
+                  s1_vals[j] = s1_vals[j]*beta1 + ((1.0f -beta1)*((float)g_vals[j]));
+                  s2_vals[j] = s2_vals[j]*beta2 + ((1.0f -beta2)*(((float)g_vals[j])*((float)g_vals[j]))); // squared version
+                  s1_vals[j] *= correction1;
+                  s2_vals[j] *= correction2;
+                  s1_vals[j] = s1_vals[j]/(sqrtf(s2_vals[j])+eps); // update
+                  s1_vals[j] = sqrtf(s1_vals[j]); // update l2 norm (square root of update)
                   break;
           }
       }

@@ -29,6 +29,7 @@ if COMPILED_WITH_CUDA:
     """C FUNCTIONS FOR OPTIMIZERS"""
     str2optimizer32bit = {}
     str2optimizer32bit["adam"] = (lib.cadam32bit_grad_fp32, lib.cadam32bit_grad_fp16, lib.cadam32bit_grad_bf16)
+    str2optimizer32bit["adama"] = (lib.cadam32bit_grad_fp32, lib.cadam32bit_grad_fp16, lib.cadam32bit_grad_bf16)
     str2optimizer32bit["momentum"] = (
         lib.cmomentum32bit_grad_32,
         lib.cmomentum32bit_grad_16,
@@ -48,6 +49,11 @@ if COMPILED_WITH_CUDA:
         lib.cadam_static_8bit_grad_32,
         lib.cadam_static_8bit_grad_16,
     )
+    str2optimizer8bit["adama"] = (
+        lib.cadam_static_8bit_grad_32,
+        lib.cadam_static_8bit_grad_16,
+    )
+    
     str2optimizer8bit["momentum"] = (
         lib.cmomentum_static_8bit_grad_32,
         lib.cmomentum_static_8bit_grad_16,
@@ -71,6 +77,11 @@ if COMPILED_WITH_CUDA:
 
     str2optimizer8bit_blockwise = {}
     str2optimizer8bit_blockwise["adam"] = (
+        lib.cadam_8bit_blockwise_grad_fp32,
+        lib.cadam_8bit_blockwise_grad_fp16,
+        lib.cadam_8bit_blockwise_grad_bf16,
+    )
+    str2optimizer8bit_blockwise["adama"] = (
         lib.cadam_8bit_blockwise_grad_fp32,
         lib.cadam_8bit_blockwise_grad_fp16,
         lib.cadam_8bit_blockwise_grad_bf16,
