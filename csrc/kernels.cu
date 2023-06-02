@@ -926,6 +926,7 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
   int valid_items = 0;
 
   T g_vals[NUM_VALS];
+  T p_vals[NUM_VALS];
 
   float s1_vals[NUM_VALS];
   float s2_vals[NUM_VALS];
@@ -950,13 +951,18 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
       __syncthreads();
       Load(temp_storage.load).Load(&(g[i]), g_vals, valid_items, 0.0f);
       __syncthreads();
+      Load(temp_storage.load).Load(&(g[i]), p_vals, valid_items, 0.0f);
+      __syncthreads();
       LoadFloat(temp_storage.loadf).Load(&(state1[i]), s1_vals, valid_items, 0.0f);
       __syncthreads();
       LoadFloat(temp_storage.loadf).Load(&(state2[i]), s2_vals, valid_items, 0.0f);
 
       # pragma unroll NUM_VALS
-      for(unsigned int j = 0; j < NUM_VALS; j++)
-        g_vals[j] = gnorm_scale*((float)g_vals[j]);
+      for(unsigned int j = 0; j < NUM_VALS; j++) {
+          g_vals[j] = gnorm_scale * ((float)g_vals[j]);
+          p_vals[j] = gnorm_scale * ((float)g_vals[j])*((float)g_vals[j]);
+          break;
+      }
 
       # pragma unroll NUM_VALS
       for(unsigned int j = 0; j < NUM_VALS; j++)
@@ -973,7 +979,7 @@ __global__ void kPreconditionOptimizer32bit2State(T* g, T* p,
                   break;
               case ADAMA:
                   s1_vals[j] = s1_vals[j]*beta1 + ((1.0f -beta1)*((float)g_vals[j]));
-                  s2_vals[j] = s2_vals[j]*beta2 + ((1.0f -beta2)*(((float)g_vals[j])*((float)g_vals[j]))); // squared version
+                  s2_vals[j] = s2_vals[j]*beta2 + ((1.0f -beta2)*((float)p_vals[j])); // squared version
                   s1_vals[j] *= correction1;
                   s2_vals[j] *= correction2;
                   s1_vals[j] = s1_vals[j]/(sqrtf(s2_vals[j])+eps); // update
@@ -1066,6 +1072,17 @@ __global__ void kOptimizer32bit2State(T* g, T* p,
           switch(OPTIMIZER)
           {
               case ADAM:
+									if(!skip_zeros || (skip_zeros && ((float)g_vals[j] != 0.0f)))
+									{
+										s1_vals[j] = s1_vals[j]*beta1 + ((1.0f -beta1)*((float)g_vals[j]));
+										s2_vals[j] = s2_vals[j]*beta2 + ((1.0f -beta2)*(((float)g_vals[j])*((float)g_vals[j])));
+										p_vals[j] = ((float)p_vals[j]) + (update_scale*step_size*(s1_vals[j]/(sqrtf(s2_vals[j])+(eps*correction2))));
+
+                    if(weight_decay > 0.0f)
+                        p_vals[j] = ((float)p_vals[j])*(1.0f-(lr*weight_decay));
+									}
+                  break;
+              case ADAMA:
 									if(!skip_zeros || (skip_zeros && ((float)g_vals[j] != 0.0f)))
 									{
 										s1_vals[j] = s1_vals[j]*beta1 + ((1.0f -beta1)*((float)g_vals[j]));
@@ -1380,6 +1397,7 @@ kPreconditionOptimizerStatic8bit2State(T* p, T* __restrict__ const g, unsigned c
         if(unorm != NULL){ atomicAdd(&unorm[0], local_unorm); }
     }
 }
+
 
 #define NUM_PER_THREAD2 4
 #define NUM_THREADS2 1024
@@ -3705,12 +3723,22 @@ template __global__ void kPreconditionOptimizer32bit2State<gtype, oname, 4096, 8
 MAKE_PreconditionOptimizer32bit2State(ADAM, float)
 MAKE_PreconditionOptimizer32bit2State(ADAM, half)
 MAKE_PreconditionOptimizer32bit2State(ADAM, __nv_bfloat16)
+MAKE_PreconditionOptimizer32bit2State(ADAMA, float)
+MAKE_PreconditionOptimizer32bit2State(ADAMA, half)
+MAKE_PreconditionOptimizer32bit2State(ADAMA, __nv_bfloat16)
+
 
 template __global__ void kOptimizer32bit2State<float, ADAM>(float* g, float* p, float* state1, float* state2, float *unorm, const float max_unorm, const float param_norm,
     const float beta1, const float beta2, const float eps, const float weight_decay,const int step, const float lr, const float gnorm_scale, const bool skip_zeros, const int n);
 template __global__ void kOptimizer32bit2State<half, ADAM>(half* g, half* p, float* state1, float* state2, float *unorm, const float max_unorm, const float param_norm,
     const float beta1, const float beta2, const float eps, const float weight_decay,const int step, const float lr, const float gnorm_scale, const bool skip_zeros, const int n);
 template __global__ void kOptimizer32bit2State<__nv_bfloat16, ADAM>(__nv_bfloat16* g, __nv_bfloat16* p, float* state1, float* state2, float *unorm, const float max_unorm, const float param_norm,
+    const float beta1, const float beta2, const float eps, const float weight_decay,const int step, const float lr, const float gnorm_scale, const bool skip_zeros, const int n);
+template __global__ void kOptimizer32bit2State<float, ADAMA>(float* g, float* p, float* state1, float* state2, float *unorm, const float max_unorm, const float param_norm,
+    const float beta1, const float beta2, const float eps, const float weight_decay,const int step, const float lr, const float gnorm_scale, const bool skip_zeros, const int n);
+template __global__ void kOptimizer32bit2State<half, ADAMA>(half* g, half* p, float* state1, float* state2, float *unorm, const float max_unorm, const float param_norm,
+    const float beta1, const float beta2, const float eps, const float weight_decay,const int step, const float lr, const float gnorm_scale, const bool skip_zeros, const int n);
+template __global__ void kOptimizer32bit2State<__nv_bfloat16, ADAMA>(__nv_bfloat16* g, __nv_bfloat16* p, float* state1, float* state2, float *unorm, const float max_unorm, const float param_norm,
     const float beta1, const float beta2, const float eps, const float weight_decay,const int step, const float lr, const float gnorm_scale, const bool skip_zeros, const int n);
 
 #define MAKE_PreconditionStatic8bit1State(oname, gtype) \
@@ -3764,6 +3792,9 @@ template __global__ void kPreconditionOptimizerStatic8bit2State<gtype, oname>(gt
 MAKE_PreconditionStatic8bit2State(ADAM, half)
 MAKE_PreconditionStatic8bit2State(ADAM, float)
 
+MAKE_PreconditionStatic8bit2State(ADAMA, half)
+MAKE_PreconditionStatic8bit2State(ADAMA, float)
+
 #define MAKE_optimizerStatic8bit2State(oname, gtype) \
 template __global__ void kOptimizerStatic8bit2State<gtype, oname>(gtype* p, gtype* const g, unsigned char* state1, unsigned char* state2, \
                 const float *unorm, const float max_unorm, const float param_norm, \
@@ -3777,6 +3808,10 @@ template __global__ void kOptimizerStatic8bit2State<gtype, oname>(gtype* p, gtyp
 
 MAKE_optimizerStatic8bit2State(ADAM, half)
 MAKE_optimizerStatic8bit2State(ADAM, float)
+
+MAKE_optimizerStatic8bit2State(ADAMA, half)
+MAKE_optimizerStatic8bit2State(ADAMA, float)
+
 
 template __global__ void kPercentileClipping<float, 2048, 4>(float * __restrict__ g, float *gnorm_vec, int step, const int n);
 template __global__ void kPercentileClipping<half, 2048, 4>(half * __restrict__ g, float *gnorm_vec, int step, const int n);
@@ -3848,7 +3883,9 @@ template __global__ void kOptimizerStatic8bit2StateBlockwise<gtype, oname, block
 MAKE_OptimizerStatic8bit2StateBlockwise(ADAM, float, 2048, 8)
 MAKE_OptimizerStatic8bit2StateBlockwise(ADAM, half, 2048, 8)
 MAKE_OptimizerStatic8bit2StateBlockwise(ADAM, __nv_bfloat16, 2048, 8)
-
+MAKE_OptimizerStatic8bit2StateBlockwise(ADAMA, float, 2048, 8)
+MAKE_OptimizerStatic8bit2StateBlockwise(ADAMA, half, 2048, 8)
+MAKE_OptimizerStatic8bit2StateBlockwise(ADAMA, __nv_bfloat16, 2048, 8)
 
 #define MAKE_OptimizerStatic8bit1StateBlockwise(oname, gtype, block_size, num_per_thread) \
 template __global__ void kOptimizerStatic8bit1StateBlockwise<gtype, oname, block_size, num_per_thread>( \
